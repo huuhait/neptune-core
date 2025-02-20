@@ -8,9 +8,11 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use itertools::Itertools;
+use neptune_cash::config_models::network::Network;
 use neptune_cash::models::blockchain::block::block_height::BlockHeight;
 use neptune_cash::models::blockchain::type_scripts::native_currency_amount::NativeCurrencyAmount;
 use neptune_cash::models::proof_abstractions::timestamp::Timestamp;
+use neptune_cash::models::state::wallet::address::SpendingKey;
 use neptune_cash::rpc_auth;
 use neptune_cash::rpc_server::RPCClient;
 use num_traits::Zero;
@@ -37,8 +39,10 @@ use super::dashboard_app::DashboardEvent;
 use super::screen::Screen;
 
 type BalanceUpdate = (
+    Network,
     BlockHeight,
     Timestamp,
+    SpendingKey,
     NativeCurrencyAmount,
     NativeCurrencyAmount,
 );
@@ -167,12 +171,13 @@ impl HistoryScreen {
             select! {
                 _ = &mut balance_history => {
                     let bh = rpc_client.history(context::current(), token).await.unwrap().unwrap();
+                    let network = rpc_client.network(context::current()).await.unwrap().unwrap();
                     let mut history_builder = Vec::with_capacity(bh.len());
                     let initial_balance = NativeCurrencyAmount::zero();
-                    let updates = bh.iter().map(|(_,_,_, delta)| *delta);
+                    let updates = bh.iter().map(|(_,_,_,_, delta)| *delta);
                     let balances = NativeCurrencyAmount::scan_balance(&updates, initial_balance);
-                    for ((_, block_height, timestamp, amount), balance) in bh.iter().zip(balances) {
-                        history_builder.push((*block_height, *timestamp, *amount, balance));
+                    for ((_, block_height, timestamp, spending_key, amount), balance) in bh.iter().zip(balances) {
+                        history_builder.push((network, *block_height, *timestamp, *spending_key, *amount, balance));
                     }
                     *balance_updates.lock().unwrap() = history_builder;
 
@@ -274,7 +279,7 @@ impl Widget for HistoryScreen {
         // table
         let style = Style::default().fg(self.fg).bg(self.bg);
         let selected_style = style.add_modifier(Modifier::REVERSED);
-        let header = vec!["height", "date", " ", "amount", "balance after"];
+        let header = vec!["height", "date", " ", "address", "amount", "balance after"];
 
         let matrix = self
             .data
@@ -283,7 +288,13 @@ impl Widget for HistoryScreen {
             .iter()
             .rev()
             .map(|bu| {
-                let (height, timestamp, amount, balance) = *bu;
+                let (network, height, timestamp, spending_key, amount, balance) = *bu;
+                let address = spending_key.to_address().expect("valid spending key");
+                let receiving_address = match address.to_bech32m_abbreviated(network) {
+                    Ok(addr) => addr,
+                    Err(_) => String::new(), // or handle the error appropriately
+                };
+
                 vec![
                     height.to_string(),
                     timestamp.standard_format(),
@@ -292,6 +303,7 @@ impl Widget for HistoryScreen {
                     } else {
                         "⭷".to_string()
                     },
+                    receiving_address,
                     amount.to_string(),
                     balance.to_string(),
                 ]

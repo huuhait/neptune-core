@@ -809,7 +809,43 @@ pub trait RPC {
     /// ```
     async fn history(
         token: rpc_auth::Token,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, NativeCurrencyAmount)>>;
+    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
+
+    /// Get the client's wallet transaction history
+    ///
+    /// ```no_run
+    /// # use anyhow::Result;
+    /// # use neptune_cash::rpc_server::RPCClient;
+    /// # use neptune_cash::rpc_auth;
+    /// # use tarpc::tokio_serde::formats::Json;
+    /// # use tarpc::serde_transport::tcp;
+    /// # use tarpc::client;
+    /// # use tarpc::context;
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<()>{
+    /// #
+    /// # // create a serde/json transport over tcp.
+    /// # let transport = tcp::connect("127.0.0.1:9799", Json::default).await?;
+    /// #
+    /// # // create an rpc client using the transport.
+    /// # let client = RPCClient::new(client::Config::default(), transport).spawn();
+    /// #
+    /// # // Defines cookie hint
+    /// # let cookie_hint = client.cookie_hint(context::current()).await??;
+    /// #
+    /// # // load the cookie file from disk and assign it to a token
+    /// # let token : rpc_auth::Token = rpc_auth::Cookie::try_load(&cookie_hint.data_directory).await?.into();
+    /// #
+    /// // query neptune-core server to get history of transactions, a vec containing digest, block height, timestamp and neptune coins tuples.
+    /// let history_transactions = client.history(context::current(), token).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
+    async fn history_by_height(
+        token: rpc_auth::Token,
+        height: BlockHeight,
+    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
 
     /// Return information about funds in the wallet
     ///
@@ -2727,19 +2763,42 @@ impl RPC for NeptuneRPCServer {
         self,
         _context: tarpc::context::Context,
         token: rpc_auth::Token,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, NativeCurrencyAmount)>> {
+    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
         log_slow_scope!(fn_name!());
         token.auth(&self.valid_tokens)?;
 
         let history = self.state.lock_guard().await.get_balance_history().await;
 
         // sort
-        let mut display_history: Vec<(Digest, BlockHeight, Timestamp, NativeCurrencyAmount)> =
+        let mut display_history: Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
             history
                 .iter()
-                .map(|(h, t, bh, a)| (*h, *bh, *t, *a))
+                .map(|(h, t, bh, s, a)| (*h, *bh, *t, *s, *a))
                 .collect::<Vec<_>>();
         display_history.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        // return
+        Ok(display_history)
+    }
+
+    // documented in trait. do not add doc-comment.
+    async fn history_by_height(
+        self,
+        _context: tarpc::context::Context,
+        token: rpc_auth::Token,
+        height: BlockHeight,
+    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
+        log_slow_scope!(fn_name!());
+        token.auth(&self.valid_tokens)?;
+
+        let history = self.state.lock_guard().await.get_balance_history_by_height(height).await;
+
+        // sort
+        let display_history: Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
+            history
+                .iter()
+                .map(|(h, t, bh, s, a)| (*h, *bh, *t, *s, *a))
+                .collect::<Vec<_>>();
 
         // return
         Ok(display_history)

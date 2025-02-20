@@ -529,7 +529,7 @@ impl GlobalState {
     /// Retrieve wallet balance history
     pub async fn get_balance_history(
         &self,
-    ) -> Vec<(Digest, Timestamp, BlockHeight, NativeCurrencyAmount)> {
+    ) -> Vec<(Digest, Timestamp, BlockHeight, SpendingKey, NativeCurrencyAmount)> {
         let current_tip_digest = self.chain.light_state().hash();
         let current_msa = self.chain.light_state().mutator_set_accumulator_after();
 
@@ -545,6 +545,10 @@ impl GlobalState {
                 continue;
             };
 
+            let spending_key = self.wallet_state
+                                                    .find_spending_key_for_utxo(&monitored_utxo.utxo)
+                                                    .expect("Spending key not found for the given UTXO");
+
             if let Some((confirming_block, confirmation_timestamp, confirmation_height)) =
                 monitored_utxo.confirmed_in_block
             {
@@ -553,6 +557,7 @@ impl GlobalState {
                     confirming_block,
                     confirmation_timestamp,
                     confirmation_height,
+                    spending_key,
                     amount,
                 ));
 
@@ -566,6 +571,68 @@ impl GlobalState {
                             spending_block,
                             spending_timestamp,
                             spending_height,
+                            spending_key,
+                            -amount,
+                        ));
+                    }
+                }
+            }
+        }
+
+        history
+    }
+
+    /// Retrieve wallet balance history
+    pub async fn get_balance_history_by_height(
+        &self,
+        height: BlockHeight,
+    ) -> Vec<(Digest, Timestamp, BlockHeight, SpendingKey, NativeCurrencyAmount)> {
+        let current_tip_digest = self.chain.light_state().hash();
+        let current_msa = self.chain.light_state().mutator_set_accumulator_after();
+
+        let monitored_utxos = self.wallet_state.wallet_db.monitored_utxos();
+
+        let mut history = vec![];
+
+        let stream = monitored_utxos.stream_values().await;
+        pin_mut!(stream); // needed for iteration
+        while let Some(monitored_utxo) = stream.next().await {
+            let Some(msmp) = monitored_utxo.membership_proof_ref_for_block(current_tip_digest)
+            else {
+                continue;
+            };
+
+            let spending_key = self.wallet_state
+                                                    .find_spending_key_for_utxo(&monitored_utxo.utxo)
+                                                    .expect("Spending key not found for the given UTXO");
+
+            if let Some((confirming_block, confirmation_timestamp, confirmation_height)) =
+                monitored_utxo.confirmed_in_block
+            {
+                if confirmation_height != height {
+                    continue;
+                }
+
+                let amount = monitored_utxo.utxo.get_native_currency_amount();
+                history.push((
+                    confirming_block,
+                    confirmation_timestamp,
+                    confirmation_height,
+                    spending_key,
+                    amount,
+                ));
+
+                if let Some((spending_block, spending_timestamp, spending_height)) =
+                    monitored_utxo.spent_in_block
+                {
+                    let actually_spent =
+                        !current_msa.verify(Tip5::hash(&monitored_utxo.utxo), msmp);
+                    if actually_spent {
+                        history.push((
+                            spending_block,
+                            spending_timestamp,
+                            spending_height,
+                            spending_key,
                             -amount,
                         ));
                     }
