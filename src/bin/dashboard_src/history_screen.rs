@@ -279,7 +279,7 @@ impl Widget for HistoryScreen {
         // table
         let style = Style::default().fg(self.fg).bg(self.bg);
         let selected_style = style.add_modifier(Modifier::REVERSED);
-        let header = vec!["height", "date", " ", "address", "amount", "balance after"];
+        let header = vec!["height", "date", " ", "amount", "balance after"];
 
         let matrix = self
             .data
@@ -288,12 +288,7 @@ impl Widget for HistoryScreen {
             .iter()
             .rev()
             .map(|bu| {
-                let (network, height, timestamp, spending_key, amount, balance) = *bu;
-                let address = spending_key.to_address()?;
-                let receiving_address = match address.to_bech32m_abbreviated(network) {
-                    Ok(addr) => addr,
-                    Err(_) => String::new(), // or handle the error appropriately
-                };
+                let (network, height, timestamp, _, amount, balance) = *bu;
 
                 vec![
                     height.to_string(),
@@ -303,7 +298,6 @@ impl Widget for HistoryScreen {
                     } else {
                         "⭷".to_string()
                     },
-                    receiving_address,
                     amount.to_string(),
                     balance.to_string(),
                 ]
