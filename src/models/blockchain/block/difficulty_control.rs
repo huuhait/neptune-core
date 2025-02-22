@@ -389,61 +389,7 @@ pub(crate) fn difficulty_control(
     target_block_interval: Option<Timestamp>,
     previous_block_height: BlockHeight,
 ) -> Difficulty {
-    // no adjustment if the previous block is the genesis block
-    if previous_block_height.is_genesis() {
-        return old_difficulty;
-    }
-
-    // otherwise, compute PID control signal
-
-    // target; signal to follow
-    let target_block_interval = target_block_interval.unwrap_or(TARGET_BLOCK_INTERVAL);
-
-    // most recent observed block time
-    let delta_t = new_timestamp - old_timestamp;
-
-    // distance to target
-    let absolute_error = (delta_t.0.value() as i64) - (target_block_interval.0.value() as i64);
-    let relative_error =
-        (absolute_error as i128) * ((1i128 << 32) / (target_block_interval.0.value() as i128));
-    let clamped_error = relative_error.clamp(-1 << 32, 4 << 32);
-
-    // Errors smaller than -1 cannot occur because delta_t >= MINIMUM_BLOCK_TIME > 0.
-    // Errors greater than 4 can occur but are clamped away because otherwise a
-    // single arbitrarily large concrete block time can induce an arbitrarily
-    // large downward adjustment to the difficulty.
-    // After clamping a `u64` suffices but before clamping we might get overflow
-    // for very large block times so we use i128 for the `relative_errror`.
-
-    // Every time ADVANCE_DIFFICULTY_CORRECTION_WAIT target block times pass
-    // between two blocks, the effective difficulty (the thing being compared
-    // against the new block's hash) drops by a factor
-    // ADVANCE_DIFFICULTY_CORRECTION_FACTOR, or drops to the minimum difficulty,
-    // whichever is largest.
-    let num_advance_reductions =
-        relative_error >> (32 + ADVANCE_DIFFICULTY_CORRECTION_WAIT.ilog2());
-    if num_advance_reductions > 0 {
-        let shift_amount = ((num_advance_reductions as u128)
-            * (ADVANCE_DIFFICULTY_CORRECTION_FACTOR.ilog2() as u128))
-            as usize;
-        old_difficulty >>= shift_amount;
-    }
-
-    // change to control signal
-    // adjustment_factor = (1 + P * error)
-    // const P: f64 = -1.0 / 16.0;
-    let one_plus_p_times_error = (1i128 << 32) + ((-clamped_error) >> 4);
-    debug_assert!(one_plus_p_times_error.is_positive());
-
-    let lo = one_plus_p_times_error as u32;
-    let hi = (one_plus_p_times_error >> 32) as u32;
-    let (new_difficulty, overflow) = old_difficulty.safe_mul_fixed_point_rational(lo, hi);
-
-    if overflow > 0 {
-        Difficulty::MAXIMUM
-    } else {
-        new_difficulty
-    }
+    return old_difficulty;
 }
 
 /// Determine an upper bound for the maximum possible cumulative proof-of-work

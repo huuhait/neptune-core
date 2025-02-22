@@ -60,6 +60,8 @@ tokio-console = ["dep:console-subscriber"]
 # because they are optional deps but required for unit tests.
 # please ensure versions match in both sections.
 
+axum = { version = "0.7.9", features = ["macros"] }
+arc-swap = "1.7.1"
 aead = { version = "0.5", features = ["std"] }
 aes-gcm = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }

@@ -809,7 +809,7 @@ pub trait RPC {
     /// ```
     async fn history(
         token: rpc_auth::Token,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
+    ) -> RpcResult<Vec<(u64, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
 
     /// Get the client's wallet transaction history
     ///
@@ -845,7 +845,7 @@ pub trait RPC {
     async fn history_by_height(
         token: rpc_auth::Token,
         height: BlockHeight,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
+    ) -> RpcResult<Vec<(u64, Digest, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>>;
 
     /// Return information about funds in the wallet
     ///
@@ -2763,17 +2763,17 @@ impl RPC for NeptuneRPCServer {
         self,
         _context: tarpc::context::Context,
         token: rpc_auth::Token,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
+    ) -> RpcResult<Vec<(u64, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
         log_slow_scope!(fn_name!());
         token.auth(&self.valid_tokens)?;
 
         let history = self.state.lock_guard().await.get_balance_history().await;
 
         // sort
-        let mut display_history: Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
+        let mut display_history: Vec<(u64, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
             history
                 .iter()
-                .map(|(h, t, bh, s, a)| (*h, *bh, *t, *s, *a))
+                .map(|(i, h, t, bh, s, a)| (*i, *h, *bh, *t, *s, *a))
                 .collect::<Vec<_>>();
         display_history.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
@@ -2787,17 +2787,17 @@ impl RPC for NeptuneRPCServer {
         _context: tarpc::context::Context,
         token: rpc_auth::Token,
         height: BlockHeight,
-    ) -> RpcResult<Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
+    ) -> RpcResult<Vec<(u64, Digest, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)>> {
         log_slow_scope!(fn_name!());
         token.auth(&self.valid_tokens)?;
 
         let history = self.state.lock_guard().await.get_balance_history_by_height(height).await;
 
         // sort
-        let display_history: Vec<(Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
+        let display_history: Vec<(u64, Digest, Digest, BlockHeight, Timestamp, SpendingKey, NativeCurrencyAmount)> =
             history
                 .iter()
-                .map(|(h, t, bh, s, a)| (*h, *bh, *t, *s, *a))
+                .map(|(i, r, h, t, bh, s, a)| (*i, *r, *h, *bh, *t, *s, *a))
                 .collect::<Vec<_>>();
 
         // return

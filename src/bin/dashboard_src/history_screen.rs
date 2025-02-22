@@ -174,9 +174,9 @@ impl HistoryScreen {
                     let network = rpc_client.network(context::current()).await.unwrap().unwrap();
                     let mut history_builder = Vec::with_capacity(bh.len());
                     let initial_balance = NativeCurrencyAmount::zero();
-                    let updates = bh.iter().map(|(_,_,_,_, delta)| *delta);
+                    let updates = bh.iter().map(|(_,_,_,_,_, delta)| *delta);
                     let balances = NativeCurrencyAmount::scan_balance(&updates, initial_balance);
-                    for ((_, block_height, timestamp, spending_key, amount), balance) in bh.iter().zip(balances) {
+                    for ((_, _, block_height, timestamp, spending_key, amount), balance) in bh.iter().zip(balances) {
                         history_builder.push((network, *block_height, *timestamp, *spending_key, *amount, balance));
                     }
                     *balance_updates.lock().unwrap() = history_builder;
