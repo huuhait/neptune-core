@@ -289,7 +289,7 @@ impl Widget for HistoryScreen {
             .rev()
             .map(|bu| {
                 let (network, height, timestamp, spending_key, amount, balance) = *bu;
-                let address = spending_key.to_address().expect("valid spending key");
+                let address = spending_key.to_address()?;
                 let receiving_address = match address.to_bech32m_abbreviated(network) {
                     Ok(addr) => addr,
                     Err(_) => String::new(), // or handle the error appropriately
